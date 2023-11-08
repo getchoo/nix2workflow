@@ -69,11 +69,13 @@ workflowLib': {
   };
 
   jobs = lib.concatLists (
-    mapAttrsToList (
-      output: _:
-        workflowLib.mkMatrix ({inherit output;} // cfg.overrides.${output} or {})
+    map (
+      output:
+        workflowLib.mkMatrix (
+          {inherit output;} // cfg.overrides.${output} or {}
+        )
     )
-    (getAttrs cfg.outputs self)
+    cfg.outputs
   );
 in {
   options = {
