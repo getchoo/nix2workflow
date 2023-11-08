@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  eval:
+    strategy:
+      matrix:
+        test: [lib, module]
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      lib-matrix: ${{ steps.lib-generate.outputs.matrix }}
+      module-matrix: ${{ steps.module-generate.outputs.matrix }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nixbuild/nix-quick-install-action@v26
+
+      - name: generate matrix
+        id: ${{ matrix.test }}-generate
+        run: |
+          cd test/${{ matrix.test }}
+          set -e
+          echo "matrix=$(nix eval --show-trace --json .#githubWorkflow.matrix)" >> "$GITHUB_OUTPUT"
+
+  # would be nice to have another matrix for these but meh
+  test-lib:
+    needs: eval
+
+    strategy:
+      matrix: ${{ fromJSON(needs.eval.outputs.lib-matrix) }}
+
+    runs-on: ${{ matrix.os }}
+
+    name: build (${{ matrix.attr }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup qemu
+        if: matrix.arch == 'aarch64'
+        run: |
+          sudo apt update -y
+          sudo apt install -y qemu-user-static
+
+      - name: install nix
+        if: matrix.arch != 'aarch64'
+        uses: nixbuild/nix-quick-install-action@v26
+
+      - name: install nix (with aarch64)
+        if: matrix.arch == 'aarch64'
+        uses: nixbuild/nix-quick-install-action@v26
+        with:
+          nix_conf: "extra-platforms = aarch64-linux arm-linux"
+
+      - name: build ${{ matrix.attr }}
+        run: |
+          cd test/lib
+          nix build -L .#${{ matrix.attr }}
+
+  test-module:
+    needs: eval
+
+    strategy:
+      matrix: ${{ fromJSON(needs.eval.outputs.module-matrix) }}
+
+    runs-on: ${{ matrix.os }}
+
+    name: build (${{ matrix.attr }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup qemu
+        if: matrix.arch == 'aarch64'
+        run: |
+          sudo apt update -y
+          sudo apt install -y qemu-user-static
+
+      - name: install nix
+        if: matrix.arch != 'aarch64'
+        uses: nixbuild/nix-quick-install-action@v26
+
+      - name: install nix (with aarch64)
+        if: matrix.arch == 'aarch64'
+        uses: nixbuild/nix-quick-install-action@v26
+        with:
+          nix_conf: "extra-platforms = aarch64-linux arm-linux"
+
+      - name: build ${{ matrix.attr }}
+        run: |
+          cd test/module
+          nix build -L .#${{ matrix.attr }}
