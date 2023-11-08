@@ -19,40 +19,45 @@ jobs:
       - uses: nixbuild/nix-quick-install-action@v26
 
       - name: generate matrix
-        id: generate
         run: |
-          cd test/${{ matrix.test }}
-          set -e
-          echo "matrix=$(nix eval --show-trace --json .#githubWorkflow.matrix)" >> "$GITHUB_OUTPUT"
+          set -euxo pipefail
 
-      - name: save matrix
-        uses: cloudposse/github-action-matrix-outputs-write@main
+          cd test/${{ matrix.test }}
+          nix eval --show-trace --json .#githubWorkflow.matrix > matrix-${{ matrix.test }}.json
+
+      - name: store matrix
+        uses: actions/upload-artifact@v3
         with:
-          matrix-step-name: ${{ github.job }}
-          matrix-key: ${{ matrix.test }}
-          outputs: |
-            matrix: ${{ steps.generate.outputs.matrix }}
+          name: matrix-${{ matrix.test }}
+          path: test/${{ matrix.test }}/matrix-${{ matrix.test }}.json
 
   read:
     needs: eval
     runs-on: ubuntu-latest
 
     outputs:
-      result: ${{ steps.read.outputs.result }}
+      lib-matrix: ${{ steps.module.outputs.result }}
+      module-matrix: ${{ steps.lib.outputs.result }}
 
     steps:
-      - name: read matrix
-        uses: cloudposse/github-action-matrix-outputs-read@main
-        id: read
-        with:
-          matrix-step-name: eval
+      - uses: actions/download-artifact@v3
+
+      - name: recover lib matrix
+        id: lib
+        run:
+          echo "result=$(cat matrix-lib/matrix-lib.json)" >> "$GITHUB_OUTPUT"
+
+      - name: recover module matrix
+        id: module
+        run:
+          echo "result=$(cat matrix-module/matrix-module.json)" >> "$GITHUB_OUTPUT"
 
   # would be nice to have another matrix for these but meh
   test-lib:
     needs: read
 
     strategy:
-      matrix: ${{ fromJSON(fromJSON(needs.read.outputs.result).matrix.lib) }}
+      matrix: ${{ fromJSON(needs.read.outputs.lib-matrix) }}
 
     runs-on: ${{ matrix.os }}
 
@@ -86,7 +91,7 @@ jobs:
     needs: read
 
     strategy:
-      matrix: ${{ fromJSON(fromJSON(needs.read.outputs.result).matrix.module) }}
+      matrix: ${{ fromJSON(needs.read.outputs.module-matrix) }}
 
     runs-on: ${{ matrix.os }}
 
