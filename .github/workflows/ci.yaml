@@ -61,7 +61,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    name: build (${{ matrix.attr }})
+    name: build (lib/${{ matrix.attr }})
 
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +95,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    name: build (${{ matrix.attr }})
+    name: build (module/${{ matrix.attr }})
 
     steps:
       - uses: actions/checkout@v4
