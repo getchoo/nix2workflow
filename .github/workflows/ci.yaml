@@ -13,28 +13,46 @@ jobs:
         test: [lib, module]
 
     runs-on: ubuntu-latest
-
-    outputs:
-      lib-matrix: ${{ steps.lib-generate.outputs.matrix }}
-      module-matrix: ${{ steps.module-generate.outputs.matrix }}
     
     steps:
       - uses: actions/checkout@v4
       - uses: nixbuild/nix-quick-install-action@v26
 
       - name: generate matrix
-        id: ${{ matrix.test }}-generate
+        id: generate
         run: |
           cd test/${{ matrix.test }}
           set -e
           echo "matrix=$(nix eval --show-trace --json .#githubWorkflow.matrix)" >> "$GITHUB_OUTPUT"
 
+      - name: save matrix
+        uses: cloudposse/github-action-matrix-outputs-write@main
+        with:
+          matrix-step-name: ${{ github.job }}
+          matrix-key: ${{ matrix.test }}
+          outputs: |
+            matrix: ${{ steps.generate.outputs.matrix }}
+
+  read:
+    needs: eval
+    runs-on: ubuntu-latest
+
+    outputs:
+      result: ${{ steps.read.outputs.result }}
+
+    steps:
+      - name: read matrix
+        uses: cloudposse/github-action-matrix-outputs-read@main
+        id: read
+        with:
+          matrix-step-name: eval
+
   # would be nice to have another matrix for these but meh
   test-lib:
-    needs: eval
+    needs: read
 
     strategy:
-      matrix: ${{ fromJSON(needs.eval.outputs.lib-matrix) }}
+      matrix: ${{ fromJSON(fromJSON(needs.read.outputs.result).matrix.lib) }}
 
     runs-on: ${{ matrix.os }}
 
@@ -65,10 +83,10 @@ jobs:
           nix build -L .#${{ matrix.attr }}
 
   test-module:
-    needs: eval
+    needs: read
 
     strategy:
-      matrix: ${{ fromJSON(needs.eval.outputs.module-matrix) }}
+      matrix: ${{ fromJSON(fromJSON(needs.read.outputs.result).matrix.module) }}
 
     runs-on: ${{ matrix.os }}
 
