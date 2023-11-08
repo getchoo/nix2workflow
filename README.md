@@ -75,8 +75,8 @@ you can see a full example in [./test/lib/flake.nix](./test/lib/flake.nix)
 ### in workflows
 
 when the matrix is imported, a few variables with added to the `matrix` context.
-these can allow you to customize your workflow based on what packages are building
-- such as enabling QEMU when building for aarch64
+these can allow you to customize your workflow based on what packages are building -
+such as enabling QEMU when building for aarch64
 
 | name | use |
 | --- | --- |
