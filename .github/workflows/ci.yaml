@@ -26,7 +26,7 @@ jobs:
           nix eval --show-trace --json .#githubWorkflow.matrix > matrix-${{ matrix.test }}.json
 
       - name: store matrix
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: matrix-${{ matrix.test }}
           path: test/${{ matrix.test }}/matrix-${{ matrix.test }}.json
