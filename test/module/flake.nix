@@ -25,6 +25,10 @@
         "aarch64-darwin"
       ];
 
+      githubWorkflowGenerator.exclude = [
+        "packages.x86_64-linux.otherHello"
+      ];
+
       perSystem = {pkgs, ...}: {
         devShells.default = pkgs.mkShell {
           packages = [pkgs.hello];
@@ -32,6 +36,7 @@
 
         packages = {
           inherit (pkgs) hello;
+          otherHello = pkgs.hello;
           default = pkgs.hello;
         };
       };

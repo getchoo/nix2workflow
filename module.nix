@@ -7,17 +7,13 @@ workflowLib': {
   cfg = config.githubWorkflowGenerator;
 
   inherit
-    (builtins)
-    attrNames
-    elem
-    ;
-
-  inherit
     (lib)
+    attrNames
+    concatLists
+    elem
     filter
-    getAttrs
-    mapAttrsToList
     mdDoc
+    mkIf
     mkOption
     literalExpression
     types
@@ -25,7 +21,7 @@ workflowLib': {
 
   workflowLib = workflowLib' (
     {inherit self;}
-    // lib.mkIf (cfg.platforms != {}) {
+    // mkIf (cfg.platforms != {}) {
       inherit (cfg) platforms;
     }
   );
@@ -63,12 +59,12 @@ workflowLib': {
       systems = mkOption {
         description = mdDoc "list of systems to build an output for";
         type = types.listOf types.str;
-        default = builtins.attrNames cfg.platforms;
+        default = attrNames cfg.platforms;
       };
     };
   };
 
-  jobs = lib.concatLists (
+  unfilteredJobs = concatLists (
     map (
       output:
         workflowLib.mkMatrix (
@@ -94,6 +90,19 @@ in {
         default = {};
       };
 
+      exclude = mkOption {
+        description = mdDoc "outputs to exclude from matrix";
+        type = types.listOf types.str;
+        default = [];
+        example = literalExpression ''
+          {
+            githubWorkflowGenerator.exclude = [
+           	  "packages.x86_64-linux.foo"
+           	];
+          }
+        '';
+      };
+
       overrides = mkOption {
         description = mdDoc "overrides for mkMatrix args";
         type = types.attrsOf (types.submodule overrides);
@@ -110,6 +119,6 @@ in {
   };
 
   config.flake.githubWorkflow = {
-    matrix.include = jobs;
+    matrix.include = filter (job: !builtins.elem job.attr cfg.exclude) unfilteredJobs;
   };
 }
