@@ -5,6 +5,7 @@ on:
 
 jobs:
   eval:
+    name: Evaluate flake
     runs-on: ubuntu-latest
 
     outputs:
@@ -13,13 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install nix
-        uses: nixbuild/nix-quick-install-action@v26
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v9
 
-      - name: generate matrix
+      - name: Generate matrix
         id: generate
         run: |
-          set -Eeu
+          set -eu
+
           echo "matrix=$(nix eval --show-trace --json .#githubWorkflow.matrix)" >> "$GITHUB_OUTPUT"
 
   build:
@@ -28,28 +30,27 @@ jobs:
     strategy:
       matrix: ${{ fromJSON(needs.eval.outputs.matrix) }}
 
+    name: Build (${{matrix.attr}})
     runs-on: ${{ matrix.os }}
-
-    name: build (${{matrix.attr}})
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup qemu
+      - name: Setup Qemu
         if: matrix.arch == 'aarch64'
-        run: |
-          sudo apt update -y
-          sudo apt install -y qemu-user-static
-
-      - name: install nix
-        if: matrix.arch != 'aarch64'
-        uses: nixbuild/nix-quick-install-action@v26
-
-      - name: install nix (with aarch64)
-        if: matrix.arch == 'aarch64'
-        uses: nixbuild/nix-quick-install-action@v26
+        uses: docker/setup-qemu-action@v3
         with:
-          nix_conf: "extra-platforms = aarch64-linux arm-linux"
+          platforms: "arm64"
 
-      - name: build ${{ matrix.attr }}
-        run: nix build -L --fallback .#${{ matrix.attr }}
+      - name: Install Nix
+        if: matrix.arch != 'aarch64'
+        uses: DeterminateSystems/nix-installer-action@v9
+
+      - name: Install Nix (with aarch64)
+        if: matrix.arch == 'aarch64'
+        uses: DeterminateSystems/nix-installer-action@v9
+        with:
+          extra-conf: "extra-platforms = aarch64-linux arm-linux"
+
+      - name: Build ${{ matrix.attr }}
+        run: nix build -L .#${{ matrix.attr }}
