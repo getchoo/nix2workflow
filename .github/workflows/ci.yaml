@@ -8,115 +8,93 @@ on:
 
 jobs:
   eval:
-    strategy:
-      matrix:
-        test: [lib, module]
-
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v4
-      - uses: nixbuild/nix-quick-install-action@v26
-
-      - name: generate matrix
-        run: |
-          set -euxo pipefail
-
-          cd test/${{ matrix.test }}
-          nix eval --show-trace --json .#githubWorkflow.matrix > matrix-${{ matrix.test }}.json
-
-      - name: store matrix
-        uses: actions/upload-artifact@v3
-        with:
-          name: matrix-${{ matrix.test }}
-          path: test/${{ matrix.test }}/matrix-${{ matrix.test }}.json
-
-  read:
-    needs: eval
+    name: Evaluate flake
     runs-on: ubuntu-latest
 
     outputs:
-      lib-matrix: ${{ steps.module.outputs.result }}
-      module-matrix: ${{ steps.lib.outputs.result }}
-
-    steps:
-      - uses: actions/download-artifact@v3
-
-      - name: recover lib matrix
-        id: lib
-        run:
-          echo "result=$(cat matrix-lib/matrix-lib.json)" >> "$GITHUB_OUTPUT"
-
-      - name: recover module matrix
-        id: module
-        run:
-          echo "result=$(cat matrix-module/matrix-module.json)" >> "$GITHUB_OUTPUT"
-
-  # would be nice to have another matrix for these but meh
-  test-lib:
-    needs: read
-
-    strategy:
-      matrix: ${{ fromJSON(needs.read.outputs.lib-matrix) }}
-
-    runs-on: ${{ matrix.os }}
-
-    name: build (lib/${{ matrix.attr }})
+      lib-matrix: ${{ steps.generate.outputs.lib }}
+      module-matrix: ${{ steps.generate.outputs.module }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup qemu
-        if: matrix.arch == 'aarch64'
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v9
+
+      - name: Generate matrix
+        id: generate
         run: |
-          sudo apt update -y
-          sudo apt install -y qemu-user-static
+          set -eu
 
-      - name: install nix
-        if: matrix.arch != 'aarch64'
-        uses: nixbuild/nix-quick-install-action@v26
+          for dir in "lib" "module"; do
+            pushd test/"$dir"
+            echo "$dir=$(nix eval --show-trace --json .#githubWorkflow.matrix)" >> "$GITHUB_OUTPUT"
+            popd
+          done
 
-      - name: install nix (with aarch64)
+  # would be nice to have another matrix for these but meh
+  test-lib:
+    needs: eval
+
+    strategy:
+      matrix: ${{ fromJSON(needs.eval.outputs.lib-matrix) }}
+
+    name: Build (lib/${{ matrix.attr }})
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Qemu
         if: matrix.arch == 'aarch64'
-        uses: nixbuild/nix-quick-install-action@v26
+        uses: docker/setup-qemu-action@v3
         with:
-          nix_conf: "extra-platforms = aarch64-linux arm-linux"
+          platforms: "arm64"
 
-      - name: build ${{ matrix.attr }}
+      - name: Install Nix
+        if: matrix.arch != 'aarch64'
+        uses: DeterminateSystems/nix-installer-action@v9
+
+      - name: Install Nix (with aarch64)
+        if: matrix.arch == 'aarch64'
+        uses: DeterminateSystems/nix-installer-action@v9
+        with:
+          extra-conf: "extra-platforms = aarch64-linux arm-linux"
+
+      - name: Build ${{ matrix.attr }}
         run: |
           cd test/lib
           nix build -L .#${{ matrix.attr }}
 
   test-module:
-    needs: read
+    needs: eval
 
     strategy:
-      matrix: ${{ fromJSON(needs.read.outputs.module-matrix) }}
+      matrix: ${{ fromJSON(needs.eval.outputs.module-matrix) }}
 
+    name: Build (module/${{ matrix.attr }})
     runs-on: ${{ matrix.os }}
-
-    name: build (module/${{ matrix.attr }})
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup qemu
+      - name: Setup Qemu
         if: matrix.arch == 'aarch64'
-        run: |
-          sudo apt update -y
-          sudo apt install -y qemu-user-static
-
-      - name: install nix
-        if: matrix.arch != 'aarch64'
-        uses: nixbuild/nix-quick-install-action@v26
-
-      - name: install nix (with aarch64)
-        if: matrix.arch == 'aarch64'
-        uses: nixbuild/nix-quick-install-action@v26
+        uses: docker/setup-qemu-action@v3
         with:
-          nix_conf: "extra-platforms = aarch64-linux arm-linux"
+          platforms: "arm64"
 
-      - name: build ${{ matrix.attr }}
+      - name: Install Nix
+        if: matrix.arch != 'aarch64'
+        uses: DeterminateSystems/nix-installer-action@v9
+
+      - name: Install Nix (with aarch64)
+        if: matrix.arch == 'aarch64'
+        uses: DeterminateSystems/nix-installer-action@v9
+        with:
+          extra-conf: "extra-platforms = aarch64-linux arm-linux"
+
+      - name: Build ${{ matrix.attr }}
         run: |
           cd test/module
           nix build -L .#${{ matrix.attr }}
