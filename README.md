@@ -1,6 +1,7 @@
 # nix2workflow
 
 ![test status](https://github.com/getchoo/nix2workflow/actions/workflows/ci.yaml/badge.svg)
+[![FlakeHub](https://img.shields.io/endpoint?url=https://flakehub.com/f/getchoo/nix2workflow/badge)](https://flakehub.com/flake/getchoo/nix2workflow)
 
 nix2workflow is a library for generating github matrices from regular nix flake outputs.
 
