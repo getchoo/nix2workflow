@@ -13,18 +13,15 @@ workflowLib': {
     elem
     filter
     mdDoc
-    mkIf
     mkOption
     literalExpression
     types
     ;
 
-  workflowLib = workflowLib' (
-    {inherit self;}
-    // mkIf (cfg.platforms != {}) {
-      inherit (cfg) platforms;
-    }
-  );
+  workflowLib = workflowLib' {
+    inherit self;
+    inherit (cfg) platforms;
+  };
 
   supportedOutputs = [
     "apps"
@@ -47,7 +44,7 @@ workflowLib': {
 
       os = mkOption {
         description = mdDoc "the name of an os supported by github runners";
-        type = types.str;
+        type = types.either types.str (types.listOf types.str);
         default = null;
         example = literalExpression "ubuntu-latest";
       };
@@ -87,7 +84,22 @@ in {
           an attrset that can map a nix system to an architecture and os supported by github
         '';
         type = types.attrsOf (types.submodule platformMap);
-        default = {};
+        default = {
+          "x86_64-linux" = {
+            os = "ubuntu-latest";
+            arch = "x64";
+          };
+
+          "aarch64-linux" = {
+            os = "ubuntu-latest";
+            arch = "aarch64";
+          };
+
+          "x86_64-darwin" = {
+            os = "macos-latest";
+            arch = "x64";
+          };
+        };
       };
 
       exclude = mkOption {
