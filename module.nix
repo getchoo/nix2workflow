@@ -4,7 +4,7 @@ workflowLib': {
   self,
   ...
 }: let
-  cfg = config.githubWorkflowGenerator;
+  cfg = config.nix2workflow;
 
   inherit
     (lib)
@@ -12,24 +12,24 @@ workflowLib': {
     concatLists
     elem
     filter
+    filterAttrs
+    literalExpression
+    mapAttrsToList
     mdDoc
     mkOption
-    literalExpression
+    recursiveUpdate
     types
     ;
 
-  workflowLib = workflowLib' {
-    inherit self;
-    inherit (cfg) platforms;
-  };
+  workflowLib = workflowLib' {inherit (cfg) platforms;};
+  inherit (workflowLib) mkMatrix mkMatrix';
 
   supportedOutputs = [
-    "apps"
     "checks"
     "devShells"
+    "nixosConfigurations"
     "darwinConfigurations"
     "homeConfigurations"
-    "nixosConfigurations"
     "packages"
   ];
 
@@ -61,45 +61,66 @@ workflowLib': {
     };
   };
 
-  unfilteredJobs = concatLists (
-    map (
-      output:
-        workflowLib.mkMatrix (
-          {inherit output;} // cfg.overrides.${output} or {}
-        )
+  jobs = concatLists (
+    mapAttrsToList (
+      output: value: let
+        common =
+          recursiveUpdate
+          {
+            root = cfg.output;
+            inherit output;
+          }
+          (cfg.overrides.${output} or {});
+
+        flat = mkMatrix' common;
+        multi = mkMatrix common;
+      in
+        {
+          # TODO: maybe make this configurable? or follow flake-schemas?
+          # these are known "flat" values
+          "nixosConfigurations" = flat;
+          "darwinConfigurations" = flat;
+          "homeConfigurations" = flat;
+        }
+        .${output}
+        or multi
     )
-    cfg.outputs
+    (filterAttrs (output: _: elem output supportedOutputs) cfg.output)
   );
 in {
   options = {
-    githubWorkflowGenerator = {
-      outputs = mkOption {
-        description = mdDoc "outputs to include in workflow";
-        type = types.listOf types.str;
-        default = filter (output: elem output supportedOutputs) (attrNames self);
+    nix2workflow = {
+      output = mkOption {
+        description = mdDoc "Root attribute for CI jobs";
+        type = types.lazyAttrsOf types.raw;
+        default = self;
+        example = literalExpression "hydraJobs";
       };
 
       platforms = mkOption {
         description = mdDoc ''
           an attrset that can map a nix system to an architecture and os supported by github
         '';
-        type = types.attrsOf (types.submodule platformMap);
-        default = {
-          "x86_64-linux" = {
-            os = "ubuntu-latest";
-            arch = "x64";
-          };
+        type = types.nullOr (types.attrsOf (types.submodule platformMap));
+        default = null;
+        example = literalExpression ''
+          {
+            "x86_64-linux" = {
+              os = "ubuntu-latest";
+              arch = "x64";
+            };
 
-          "aarch64-linux" = {
-            os = "ubuntu-latest";
-            arch = "aarch64";
-          };
+            "aarch64-linux" = {
+              os = "self-hosted";
+              arch = "aarch64";
+            };
 
-          "x86_64-darwin" = {
-            os = "macos-latest";
-            arch = "x64";
-          };
-        };
+            "x86_64-darwin" = {
+              os = "macos-latest";
+              arch = "x64";
+            };
+          }
+        '';
       };
 
       exclude = mkOption {
@@ -108,7 +129,7 @@ in {
         default = [];
         example = literalExpression ''
           {
-            githubWorkflowGenerator.exclude = [
+            nix2workflow.exclude = [
            	  "packages.x86_64-linux.foo"
            	];
           }
@@ -121,7 +142,7 @@ in {
         default = {};
         example = literalExpression ''
           {
-            githubWorkflowGenerator.overrides = {
+            nix2workflow.overrides = {
               checks.systems = [ "x86_64-linux" ];
             };
           }
@@ -130,7 +151,7 @@ in {
     };
   };
 
-  config.flake.githubWorkflow = {
-    matrix.include = filter (job: !builtins.elem job.attr cfg.exclude) unfilteredJobs;
+  config.flake.workflowMatrix = {
+    include = filter (job: !elem job.attr cfg.exclude) jobs;
   };
 }

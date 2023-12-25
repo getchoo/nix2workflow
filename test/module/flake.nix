@@ -25,9 +25,15 @@
         "aarch64-darwin"
       ];
 
-      githubWorkflowGenerator.exclude = [
-        "packages.x86_64-linux.otherHello"
-      ];
+      nix2workflow = {
+        exclude = [
+          "packages.x86_64-linux.otherHello"
+        ];
+
+        overrides = {
+          devShells.systems = ["x86_64-linux"];
+        };
+      };
 
       perSystem = {pkgs, ...}: {
         devShells.default = pkgs.mkShell {
