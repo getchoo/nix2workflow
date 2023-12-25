@@ -28,7 +28,7 @@ jobs:
 
           for dir in "lib" "module"; do
             pushd test/"$dir"
-            echo "$dir=$(nix eval --show-trace --json .#githubWorkflow.matrix)" >> "$GITHUB_OUTPUT"
+            echo "$dir=$(nix eval --show-trace --json .#workflowMatrix)" >> "$GITHUB_OUTPUT"
             popd
           done
 
@@ -37,6 +37,7 @@ jobs:
     needs: eval
 
     strategy:
+      fail-fast: false
       matrix: ${{ fromJSON(needs.eval.outputs.lib-matrix) }}
 
     name: Build (lib/${{ matrix.attr }})
@@ -70,6 +71,7 @@ jobs:
     needs: eval
 
     strategy:
+      fail-fast: false
       matrix: ${{ fromJSON(needs.eval.outputs.module-matrix) }}
 
     name: Build (module/${{ matrix.attr }})

@@ -22,12 +22,13 @@ jobs:
         run: |
           set -eu
 
-          echo "matrix=$(nix eval --show-trace --json .#githubWorkflow.matrix)" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(nix eval --show-trace --json .#workflowMatrix)" >> "$GITHUB_OUTPUT"
 
   build:
     needs: eval
 
     strategy:
+      fail-fast: false
       matrix: ${{ fromJSON(needs.eval.outputs.matrix) }}
 
     name: Build (${{matrix.attr}})

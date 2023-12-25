@@ -19,8 +19,8 @@
       "aarch64-darwin"
     ];
 
-    forAllSystems = fn: lib.genAttrs systems (sys: fn nixpkgs.legacyPackages.${sys});
-    workflow = (call-flake ../../.).lib {inherit self;};
+    forSystem = system: fn: fn nixpkgs.legacyPackages.${system};
+    forAllSystems = fn: lib.genAttrs systems (sys: forSystem sys fn);
   in {
     devShells = forAllSystems (pkgs: {
       default = pkgs.mkShell {
@@ -28,21 +28,40 @@
       };
     });
 
+    flatPackages = forSystem "x86_64-linux" ({hello, ...}: {inherit hello;});
+
     packages = forAllSystems (pkgs: {
       inherit (pkgs) hello;
       default = pkgs.hello;
     });
 
-    githubWorkflow = let
-      outputs = ["packages" "devShells"];
-      jobs = lib.concatLists (
-        map (
-          output: workflow.mkMatrix {inherit output;}
-        )
-        outputs
+    workflowMatrix = let
+      platforms = {
+        x86_64-linux = {
+          os = "ubuntu-latest";
+          arch = "x64";
+        };
+
+        aarch64-linux = {
+          os = "ubuntu-latest";
+          arch = "aarch64";
+        };
+      };
+
+      inherit ((call-flake ../../.).lib {inherit platforms;}) mkMatrix mkMatrix';
+
+      jobs = lib.flatten (
+        (mkMatrix' {
+          root = self;
+          output = "flatPackages";
+        })
+        ++ (mkMatrix {
+          root = self;
+          output = "packages";
+        })
       );
     in {
-      matrix.include = jobs;
+      include = jobs;
     };
   };
 }
